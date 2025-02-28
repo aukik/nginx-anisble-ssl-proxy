@@ -1,0 +1,166 @@
+---
+- name: Set up Nginx reverse proxy with SSL using Certbot
+  hosts: "{{ target_hosts | default('your_servers') }}"
+  become: true
+  vars_files:
+    - vars.yml
+
+  tasks:
+    - name: Update package cache (Debian/Ubuntu)
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+    - name: Update package cache (RHEL/CentOS)
+      yum:
+        update_cache: yes
+      when: ansible_os_family == "RedHat"
+
+    - name: Install required packages (Debian/Ubuntu)
+      apt:
+        name:
+          - nginx
+          - certbot
+          - python3-certbot-nginx
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Install EPEL repository (RHEL/CentOS)
+      yum:
+        name: epel-release
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Install required packages (RHEL/CentOS)
+      yum:
+        name:
+          - nginx
+          - certbot
+          - python3-certbot-nginx
+        state: present
+      when: ansible_os_family == "RedHat"
+
+    - name: Ensure nginx directories exist
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+      loop:
+        - "{{ nginx_conf_path }}"
+        - "{{ nginx_enabled_path }}"
+
+    - name: Create Nginx configuration for the reverse proxy
+      template:
+        src: templates/nginx-site.conf.j2
+        dest: "{{ nginx_conf_path }}/{{ domain_name }}.conf"
+      notify: Reload Nginx
+
+    - name: Enable site configuration
+      file:
+        src: "{{ nginx_conf_path }}/{{ domain_name }}.conf"
+        dest: "{{ nginx_enabled_path }}/{{ domain_name }}.conf"
+        state: link
+      notify: Reload Nginx
+
+    - name: Remove default Nginx site
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ nginx_enabled_path }}/default"
+        - "{{ nginx_enabled_path }}/default.conf"
+      ignore_errors: yes
+      notify: Reload Nginx
+
+    - name: Configure firewall for HTTP/HTTPS access (UFW)
+      ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+      loop:
+        - 80
+        - 443
+      when: ansible_os_family == "Debian" and use_ufw | default(false)
+
+    - name: Configure firewall for HTTP/HTTPS access (firewalld)
+      firewalld:
+        service: "{{ item }}"
+        permanent: yes
+        state: enabled
+      loop:
+        - http
+        - https
+      when: ansible_os_family == "RedHat" and use_firewalld | default(false)
+
+    - name: Ensure Nginx is started and enabled
+      service:
+        name: nginx
+        state: started
+        enabled: yes
+
+    - name: Test Nginx configuration
+      command: nginx -t
+      register: nginx_test
+      changed_when: false
+      failed_when: nginx_test.rc != 0
+
+    - name: Check if domain resolves properly
+      uri:
+        url: "http://{{ domain_name }}"
+        method: GET
+        status_code: 200, 301, 302, 404
+        timeout: 5
+      register: domain_check
+      ignore_errors: yes
+
+    - name: Warn if domain doesn't seem to be properly configured
+      debug:
+        msg: "Warning: The domain {{ domain_name }} may not be properly configured to point to this server. This might cause issues with obtaining SSL certificates."
+      when: domain_check.failed
+
+    - name: Obtain SSL certificate using Certbot (Staging for testing)
+      command: >
+        certbot --nginx
+        -d {{ domain_name }}
+        --non-interactive
+        --agree-tos
+        --email {{ certbot_email }}
+        --redirect
+        --staging
+      args:
+        creates: /etc/letsencrypt/live/{{ domain_name }}
+      when: use_staging_certbot | default(false)
+
+    - name: Obtain SSL certificate using Certbot (Production)
+      command: >
+        certbot --nginx
+        -d {{ domain_name }}
+        --non-interactive
+        --agree-tos
+        --email {{ certbot_email }}
+        --redirect
+      # args:
+      #   creates: /etc/letsencrypt/live/{{ domain_name }}
+      when: not use_staging_certbot | default(false)
+
+    - name: Set up automatic renewal for SSL certificates
+      cron:
+        name: "Certbot renewal"
+        job: "certbot renew --quiet --no-self-upgrade"
+        hour: "3"
+        minute: "30"
+        weekday: "1"
+
+  handlers:
+    - name: Reload Nginx
+      service:
+        name: nginx
+        state: reloaded
+
+    - name: Restart Nginx
+      service:
+        name: nginx
+        state: restarted

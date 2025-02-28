@@ -1,0 +1,22 @@
+---
+# Server configuration
+target_hosts: your_servers
+
+# Target application
+app_port: 5678 #!Change it
+app_host: "localhost"  # Change if the app is on another server
+
+# SSL/Domain settings
+domain_name: {{your_domain_name}} #!Change it. String. Make sure the domain points to the server.
+certbot_email: {{email_for_certbot_notifications}} #!Change it. String.
+
+# Nginx settings
+nginx_conf_path: "/etc/nginx/sites-available"
+nginx_enabled_path: "/etc/nginx/sites-enabled"
+
+# Firewall configuration
+use_ufw: true  # Set to true for Ubuntu/Debian if you want to configure UFW. Recommended: true
+use_firewalld: false  # Set to true for RHEL/CentOS if you want to configure firewalld
+
+# Certbot settings
+use_staging_certbot: false  # Keep it false
