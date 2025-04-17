@@ -1,9 +1,12 @@
+### ========================================================================================================
+### =============== YOU ONLY HAVE TO CHANGE inventory.ini and vars.yml FILE=================================
+### ========================================================================================================
 ### How to Use This Playbook
 
 1. **Prepare your environment**:
    - Ensure you have Ansible installed on your control machine
-   - Make sure the domain name you want to use points to your server's IP address
-   - Verify SSH access to your target server
+   - Make sure the domain name you want to use points to your server's IP address (inventory.ini)
+   - Verify SSH access to your target server (inventory.ini)
 
 2. **Customize the variables**:
    - Edit `vars.yml` to set your domain name, email address, and target port
@@ -16,12 +19,10 @@
 
 ### Customization Options
 
-To use this playbook on a different server, just modify these key variables:
-
-- `domain_name`: Your domain name that points to the server
-- `certbot_email`: Your email address for Let's Encrypt notifications
-- `app_port`: The port your application is running on (default: 5678)
-- Update the inventory file with the new server details
+- `domain_name`: Your domain name that points to the server (vars.yml)
+- `certbot_email`: Your email address for Let's Encrypt notifications (vars.yml)
+- `app_port`: The port your application is running on (default: 5678) (vars.yml)
+- Update the inventory file with the new server details (inventory.ini)
 
 ### What This Playbook Does
 
